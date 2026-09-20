@@ -232,11 +232,13 @@ jobs:
           cc="$toolchain/bin/arm-none-linux-gnueabi-gcc"
           strip="$toolchain/bin/arm-none-linux-gnueabi-strip"
           "$cc" --version
+          export LIBS="-lrt"
           ./autogen.sh \
             --host=arm-none-linux-gnueabi \
             CC="$cc" \
             CFLAGS="-march=armv5te -Os" \
             LDFLAGS="-static" \
+            LIBS="-lrt" \
             --disable-manpage-support
           make clean || true
           make
