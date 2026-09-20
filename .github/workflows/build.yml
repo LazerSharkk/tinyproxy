@@ -1,0 +1,314 @@
+name: build tinyproxy
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release'
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-amd64
+            artifact: tinyproxy-linux-amd64
+            host: x86_64-linux-gnu
+            cc: gcc
+            strip: strip
+            cflags: "-O2"
+            ldflags: ""
+
+          - name: linux-386
+            artifact: tinyproxy-linux-386
+            host: i686-linux-gnu
+            cc: gcc
+            strip: strip
+            cflags: "-m32 -O2"
+            ldflags: "-m32"
+
+          - name: linux-arm64
+            artifact: tinyproxy-linux-arm64
+            host: aarch64-linux-gnu
+            cc: aarch64-linux-gnu-gcc
+            strip: aarch64-linux-gnu-strip
+            cflags: "-O2"
+            ldflags: ""
+
+          - name: linux-armv7
+            artifact: tinyproxy-linux-armv7
+            host: arm-linux-gnueabihf
+            cc: arm-linux-gnueabihf-gcc
+            strip: arm-linux-gnueabihf-strip
+            cflags: "-march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard -O2"
+            ldflags: ""
+
+          - name: linux-armv6
+            artifact: tinyproxy-linux-armv6
+            host: arm-linux-gnueabi
+            cc: arm-linux-gnueabi-gcc
+            strip: arm-linux-gnueabi-strip
+            cflags: "-march=armv6 -O2"
+            ldflags: ""
+
+          - name: linux-armv5
+            artifact: tinyproxy-linux-armv5
+            host: arm-linux-gnueabi
+            cc: arm-linux-gnueabi-gcc
+            strip: arm-linux-gnueabi-strip
+            cflags: "-march=armv5te -Os"
+            ldflags: ""
+
+          - name: linux-mips
+            artifact: tinyproxy-linux-mips
+            host: mips-linux-gnu
+            cc: mips-linux-gnu-gcc-10
+            strip: mips-linux-gnu-strip
+            cflags: "-O2"
+            ldflags: ""
+
+          - name: linux-mipsel
+            artifact: tinyproxy-linux-mipsel
+            host: mipsel-linux-gnu
+            cc: mipsel-linux-gnu-gcc-10
+            strip: mipsel-linux-gnu-strip
+            cflags: "-O2"
+            ldflags: ""
+
+          - name: linux-ppc
+            artifact: tinyproxy-linux-ppc
+            host: powerpc-linux-gnu
+            cc: powerpc-linux-gnu-gcc
+            strip: powerpc-linux-gnu-strip
+            cflags: "-O2"
+            ldflags: ""
+
+          - name: linux-ppc64
+            artifact: tinyproxy-linux-ppc64
+            host: powerpc64-linux-gnu
+            cc: powerpc64-linux-gnu-gcc
+            strip: powerpc64-linux-gnu-strip
+            cflags: "-O2"
+            ldflags: ""
+
+          - name: linux-ppc64le
+            artifact: tinyproxy-linux-ppc64le
+            host: powerpc64le-linux-gnu
+            cc: powerpc64le-linux-gnu-gcc
+            strip: powerpc64le-linux-gnu-strip
+            cflags: "-O2"
+            ldflags: ""
+
+          - name: linux-riscv64
+            artifact: tinyproxy-linux-riscv64
+            host: riscv64-linux-gnu
+            cc: riscv64-linux-gnu-gcc
+            strip: riscv64-linux-gnu-strip
+            cflags: "-O2"
+            ldflags: ""
+
+          - name: linux-armv5-linux26-glibc25
+            artifact: tinyproxy-linux-armv5-linux26-glibc25
+            legacy: true
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+
+      - name: install modern toolchain
+        if: matrix.legacy != true
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake gperf make
+          case "${{ matrix.name }}" in
+            linux-amd64)
+              sudo apt-get install -y gcc
+              ;;
+            linux-386)
+              sudo apt-get install -y gcc gcc-multilib
+              ;;
+            linux-arm64)
+              sudo apt-get install -y gcc-aarch64-linux-gnu
+              ;;
+            linux-armv7)
+              sudo apt-get install -y gcc-arm-linux-gnueabihf
+              ;;
+            linux-armv6|linux-armv5)
+              sudo apt-get install -y gcc-arm-linux-gnueabi
+              ;;
+            linux-mips)
+              sudo apt-get install -y gcc-10-mips-linux-gnu binutils-mips-linux-gnu
+              ;;
+            linux-mipsel)
+              sudo apt-get install -y gcc-10-mipsel-linux-gnu binutils-mipsel-linux-gnu
+              ;;
+            linux-ppc)
+              sudo apt-get install -y gcc-powerpc-linux-gnu
+              ;;
+            linux-ppc64)
+              sudo apt-get install -y gcc-powerpc64-linux-gnu
+              ;;
+            linux-ppc64le)
+              sudo apt-get install -y gcc-powerpc64le-linux-gnu
+              ;;
+            linux-riscv64)
+              sudo apt-get install -y gcc-riscv64-linux-gnu
+              ;;
+          esac
+          command -v "${{ matrix.cc }}"
+
+      - name: test legacy toolchain url
+        if: matrix.legacy == true
+        run: |
+          curl -IL \
+            --retry 3 \
+            --retry-all-errors \
+            "https://github.com/LazerSharkk/toolchains/releases/download/arm-2008q3-72/arm-2008q3-72-arm-none-linux-gnueabi-i686-pc-linux-gnu.tar.bz2"
+
+      - name: download legacy armv5 toolchain
+        if: matrix.legacy == true
+        run: |
+          mkdir -p "$HOME/toolchain"
+          curl -fL \
+            --retry 5 \
+            --retry-all-errors \
+            "https://github.com/LazerSharkk/toolchains/releases/download/arm-2008q3-72/arm-2008q3-72-arm-none-linux-gnueabi-i686-pc-linux-gnu.tar.bz2" \
+            -o /tmp/toolchain.tar.bz2
+          ls -lh /tmp/toolchain.tar.bz2
+          file /tmp/toolchain.tar.bz2
+          tar -xjf /tmp/toolchain.tar.bz2 \
+            -C "$HOME/toolchain"
+          find "$HOME/toolchain" \
+            -name arm-none-linux-gnueabi-gcc \
+            -type f \
+            -print
+
+      - name: install legacy toolchain runtime
+        if: matrix.legacy == true
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y \
+            libc6:i386 \
+            libstdc++6:i386 \
+            autoconf automake gperf make
+
+      - name: build modern target
+        if: matrix.legacy != true
+        env:
+          CC: ${{ matrix.cc }}
+          CFLAGS: ${{ matrix.cflags }}
+          LDFLAGS: ${{ matrix.ldflags }}
+        run: |
+          ./autogen.sh \
+            --host="${{ matrix.host }}" \
+            CC="$CC" \
+            CFLAGS="$CFLAGS" \
+            LDFLAGS="$LDFLAGS" \
+            --disable-manpage-support
+          make clean || true
+          make
+          mkdir -p dist
+          cp src/tinyproxy \
+            "dist/${{ matrix.artifact }}"
+          ${{ matrix.strip }} "dist/${{ matrix.artifact }}" || strip "dist/${{ matrix.artifact }}" || true
+
+      - name: build legacy armv5 target
+        if: matrix.legacy == true
+        run: |
+          toolchain="$HOME/toolchain/arm-2008q3"
+          cc="$toolchain/bin/arm-none-linux-gnueabi-gcc"
+          strip="$toolchain/bin/arm-none-linux-gnueabi-strip"
+          "$cc" --version
+          ./autogen.sh \
+            --host=arm-none-linux-gnueabi \
+            CC="$cc" \
+            CFLAGS="-march=armv5te -Os" \
+            LDFLAGS="-static" \
+            --disable-manpage-support
+          make clean || true
+          make
+          mkdir -p dist
+          cp src/tinyproxy \
+            "dist/${{ matrix.artifact }}"
+          "$strip" "dist/${{ matrix.artifact }}" || true
+
+      - name: inspect binary
+        run: |
+          file "dist/${{ matrix.artifact }}"
+
+      - name: calculate sha256
+        run: |
+          cd dist
+          sha256sum \
+            "${{ matrix.artifact }}" \
+            > "${{ matrix.artifact }}.sha256"
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/
+
+  release:
+    name: create release
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: download all artifacts
+        uses: actions/download-artifact@v5
+        with:
+          path: release
+
+      - name: flatten release directory
+        run: |
+          mkdir -p release-files
+          find release \
+            -type f \
+            -exec cp {} release-files/ \;
+          cd release-files
+          ls -lah
+
+      - name: generate manifest
+        run: |
+          cd release-files
+          echo '{' > manifest.json
+          first=true
+          for file in tinyproxy-*; do
+            case "$file" in
+              *.sha256)
+                continue
+                ;;
+            esac
+            sha256=$(sha256sum "$file" | awk '{print $1}')
+            if [ "$first" = false ]; then
+              echo "," >> manifest.json
+            fi
+            first=false
+            printf '  "%s": "%s"' \
+              "$file" \
+              "$sha256" \
+              >> manifest.json
+          done
+          echo '' >> manifest.json
+          echo '}' >> manifest.json
+          cat manifest.json
+
+      - name: create github release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: release-files/*
+          generate_release_notes: true
